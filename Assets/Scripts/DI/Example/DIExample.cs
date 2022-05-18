@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 namespace DI.Example
@@ -14,20 +15,42 @@ namespace DI.Example
         private MeshFilter _meshFilter;
         [Space]
         [SerializeField]
-        private BackedInjectionTarget _rootToInject;
+        private GameObject _rootToInject;
+        [SerializeField]
+        private GameObject _rootToInject2;
 
-        private void Start()
+        GameObjectDIContainer _dIContainer;
+
+        private IEnumerator Start()
         {
-            DIContainer dIContainer = new DIContainer();
+            Source source = new Source();
 
-            dIContainer.AddSource(new SingletonSource<GameObject>(_gameObject));
-            dIContainer.AddSource(new FuncSource<Camera>(FindObjectOfType<Camera>));
-            dIContainer.AddSource(new SingletonSource<Object>(_gameObject));
-            dIContainer.AddSource(new SingletonSource<Transform>(_transform));
-            dIContainer.AddSource(new SingletonSource<MeshRenderer>(_meshRenderer));
-            dIContainer.AddSource(new FuncSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>));
+            source.Add(new SingletonSource<GameObject>(_gameObject));
+            source.Add(new FuncSource<Camera>(FindObjectOfType<Camera>));
+            source.Add(new SingletonSource<Object>(_gameObject));
+            source.Add(new SingletonSource<Transform>(_transform));
+            source.Add(new SingletonSource<MeshRenderer>(_meshRenderer));
+            source.Add(new FuncSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>));
+            source.Add(new InstanceSource<SomeDummyClass>(5f));
 
-            dIContainer.Inject(_rootToInject);
+            _dIContainer = new GameObjectDIContainer(source, new UnityLogErrorProvider());
+
+            yield return new WaitForSeconds(1f);
+
+            _dIContainer.Inject(_rootToInject);
+
+            yield return new WaitForSeconds(1f);
+            _dIContainer.Inject(_rootToInject2);
+
+            yield return new WaitForSeconds(0.2f);
+            Debug.LogError("Pause");
+
+        }
+
+        [ContextMenu(nameof(Inject))]
+        private void Inject()
+        {
+            _dIContainer.Inject(_rootToInject);
         }
     }
 }

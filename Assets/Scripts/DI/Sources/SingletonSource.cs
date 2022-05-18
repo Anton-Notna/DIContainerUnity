@@ -1,6 +1,6 @@
 ﻿namespace DI
 {
-    public class SingletonSource<T> : Source<T>
+    public class SingletonSource<T> : SourceUnit<T>
     {
         private T _value;
 
