@@ -5,30 +5,90 @@ using UnityEngine;
 
 namespace DI
 {
+    // TODO:
+    // Compare with Zenject
+    // Non component injection
+    // Many contexts
+    // (?) Injecting source when adding
+    // Move _injectableTypes/_closedTypes/Prebake/CashInjectableType/IsInjectableType to another module
+    // (?) Remove generic from IReadOnlyDIContainer
+    // Is it possible to improve perfomance of MethodBase.Invoke()/FieldInfo.SetValue()?
+
     public class GameObjectDIContainer : IReadOnlyDIContainer<GameObject>
     {
-        private class CashedMembers
+        private class CashedMethod
         {
-            public readonly IReadOnlyList<FieldInfo> Fields;
-            public readonly IReadOnlyList<MethodInfo> Methods;
+            public readonly MethodInfo Method;
+            public readonly IReadOnlyList<Type> Parameters;
 
-            public CashedMembers(IReadOnlyList<FieldInfo> fields, IReadOnlyList<MethodInfo> methods)
+            public CashedMethod(MethodInfo methodInfo)
             {
-                Fields = fields;
-                Methods = methods;
+                Method = methodInfo;
+
+                ParameterInfo[] parameters = Method.GetParameters();
+                List<Type> parameterTypes = new List<Type>(parameters.Length);
+                for (int i = 0; i < parameters.Length; i++)
+                    parameterTypes.Add(parameters[i].ParameterType);
+
+                Parameters = parameterTypes;
             }
         }
 
-        private IReadOnlySource _source;
-        private IErrorProvider _errorProvider;
-        private List<Component> _components = new List<Component>();
-        private HashSet<Type> _badTypes = new HashSet<Type>();
-        private Dictionary<Type, CashedMembers> _goodTypes = new Dictionary<Type, CashedMembers>();
-
-        public GameObjectDIContainer(IReadOnlySource source, IErrorProvider errorProvider)
+        private class CashedMembers
         {
-            _source = source;
+            public readonly IReadOnlyList<FieldInfo> Fields;
+            public readonly IReadOnlyList<CashedMethod> Methods;
+
+            public CashedMembers(Type type)
+            {
+                List<FieldInfo> cashedFields = new List<FieldInfo>();
+                List<CashedMethod> cashedMethods = new List<CashedMethod>();
+
+                FieldInfo[] fields = type.GetFields(Constants.Flags);
+                for (int f = 0; f < fields.Length; f++)
+                    if (fields[f].IsDefined(typeof(DIFIeldAttribute), true))
+                        cashedFields.Add(fields[f]);
+
+                MethodInfo[] methods = type.GetMethods(Constants.Flags);
+                for (int m = 0; m < methods.Length; m++)
+                    if (methods[m].IsDefined(typeof(DIMethodAttribute), true))
+                        cashedMethods.Add(new CashedMethod(methods[m]));
+
+                Fields = cashedFields;
+                Methods = cashedMethods;
+            }
+        }
+
+        private IReadOnlyContext _context;
+        private IErrorProvider _errorProvider;
+
+        private HashSet<Type> _closedTypes = new HashSet<Type>();
+        private Dictionary<Type, CashedMembers> _injectableTypes = new Dictionary<Type, CashedMembers>();
+
+        private List<Component> _components = new List<Component>();
+        private ReusableArray<object> _reusableArray = new ReusableArray<object>(10);
+
+        public GameObjectDIContainer(IReadOnlyContext context, IErrorProvider errorProvider)
+        {
+            _context = context;
             _errorProvider = errorProvider;
+        }
+
+        public void Prebake()
+        {
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int a = 0; a < assemblies.Length; a++)
+            {
+                Type[] types = assemblies[a].GetTypes();
+                for (int t = 0; t < types.Length; t++)
+                {
+                    Type type = types[t];
+                    if (type.IsDefined(typeof(DITargetAttribute), true))
+                        CashInjectableType(type);
+                    else
+                        _closedTypes.Add(type);
+                }
+            }
         }
 
         public void Inject(GameObject target) 
@@ -45,16 +105,9 @@ namespace DI
             for (int c = 0; c < _components.Count; c++)
             {
                 Type type = _components[c].GetType();
-                if (_badTypes.Contains(type))
-                    continue;
 
-                if (type.IsDefined(typeof(DITargetAttribute), true) == false)
-                {
-                    _badTypes.Add(type);
-                    continue;
-                }
-
-                InjectUnit(_components[c], type);
+                if (IsInjectableType(type))
+                    InjectUnit(_components[c], type);
             }
         }
 
@@ -66,24 +119,8 @@ namespace DI
 
         private void InjectUnit(Component component, Type type)
         {
-            if (_goodTypes.TryGetValue(type, out CashedMembers members) == false)
-            {
-                List<FieldInfo> cashedFields = new List<FieldInfo>();
-                List<MethodInfo> cashedMethods = new List<MethodInfo>();
-
-                FieldInfo[] fields = type.GetFields(Constants.Flags);
-                for (int f = 0; f < fields.Length; f++)
-                    if (fields[f].IsDefined(typeof(DIFIeldAttribute), true))
-                        cashedFields.Add(fields[f]);
-
-                MethodInfo[] methods = type.GetMethods(Constants.Flags);
-                for (int m = 0; m < methods.Length; m++)
-                    if (methods[m].IsDefined(typeof(DIMethodAttribute), true))
-                        cashedMethods.Add(methods[m]);
-
-                members = new CashedMembers(cashedFields, cashedMethods);
-                _goodTypes.Add(type, members);
-            }
+            if (_injectableTypes.TryGetValue(type, out CashedMembers members) == false)
+                members = CashInjectableType(type);
 
             for (int i = 0; i < members.Fields.Count; i++)
                 SetField(members.Fields[i], component);
@@ -94,26 +131,45 @@ namespace DI
 
         private void SetField(FieldInfo field, object target) => field.SetValue(target, GetObject(field.FieldType));
 
-        private void InvokeMethod(MethodInfo method, object target)
+        private void InvokeMethod(CashedMethod method, object target)
         {
-            ParameterInfo[] parameters = method.GetParameters();
+            IReadOnlyList<Type> parameters = method.Parameters;
 
-            if (parameters.Length == 0)
+            if (parameters.Count == 0)
             {
-                method.Invoke(target, null);
+                method.Method.Invoke(target, null);
                 return;
             }
 
-            object[] objects = new object[parameters.Length];
-            for (int i = 0; i < parameters.Length; i++)
-                objects[i] = GetObject(parameters[i].ParameterType);
+            object[] objects = _reusableArray.Get(parameters.Count);
+            for (int i = 0; i < parameters.Count; i++)
+                objects[i] = GetObject(parameters[i]);
 
-            method.Invoke(target, objects);
+            method.Method.Invoke(target, objects);
+        }
+
+        private bool IsInjectableType(Type type)
+        {
+            if (_closedTypes.Contains(type))
+                return false;
+
+            if (type.IsDefined(typeof(DITargetAttribute), true))
+                return true;
+                       
+            _closedTypes.Add(type);
+            return false;
+        }
+
+        private CashedMembers CashInjectableType(Type type)
+        {
+            CashedMembers members = new CashedMembers(type);
+            _injectableTypes.Add(type, members);
+            return members;
         }
 
         private object GetObject(Type type)
         {
-            if (_source.TryGet(type, out object value))
+            if (_context.TryGet(type, out object value))
                 return value;
 
             _errorProvider.Throw(new NullReferenceException($"Try to inject from non existing source typeof {type}"));

@@ -2,9 +2,9 @@
 
 namespace DI
 {
-    public interface ISource : IReadOnlySource
+    public interface ISource
     {
-        public void Add(ISourceUnit unit);
-        public void Remove(Type type);
+        public Type Type { get; }
+        public object Value { get; }
     }
 }

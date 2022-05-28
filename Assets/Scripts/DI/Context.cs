@@ -3,11 +3,17 @@ using System.Collections.Generic;
 
 namespace DI
 {
-    public class Source : ISource
+    public class Context : IContext
     {
-        private Dictionary<Type, ISourceUnit> _sources = new Dictionary<Type, ISourceUnit>();
+        private Dictionary<Type, ISource> _sources = new Dictionary<Type, ISource>();
 
-        public void Add(ISourceUnit unit)
+        public void AddRange(IEnumerable<ISource> units)
+        {
+            foreach (ISource source in units)
+                Add(source);
+        }
+
+        public void Add(ISource unit)
         {
             if (Contains(unit.Type))
                 throw new InvalidOperationException($"Source typeof {unit.Type} already added");
@@ -16,6 +22,12 @@ namespace DI
         }
 
         public bool Contains(Type type) => _sources.ContainsKey(type);
+
+        public void RemoveRange(IEnumerable<Type> types)
+        {
+            foreach (Type source in types)
+                Remove(source);
+        }
 
         public void Remove(Type type)
         {
@@ -27,7 +39,7 @@ namespace DI
 
         public bool TryGet(Type type, out object value)
         {
-            if (_sources.TryGetValue(type, out ISourceUnit unit))
+            if (_sources.TryGetValue(type, out ISource unit))
             {
                 value = unit.Value;
                 return true;

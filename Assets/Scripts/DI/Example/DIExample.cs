@@ -23,24 +23,27 @@ namespace DI.Example
 
         private IEnumerator Start()
         {
-            Source source = new Source();
+            Context source = new Context();
 
             source.Add(new SingletonSource<GameObject>(_gameObject));
-            source.Add(new FuncSource<Camera>(FindObjectOfType<Camera>));
+            source.Add(new SingletonSource<Camera>(FindObjectOfType<Camera>()));
             source.Add(new SingletonSource<Object>(_gameObject));
             source.Add(new SingletonSource<Transform>(_transform));
             source.Add(new SingletonSource<MeshRenderer>(_meshRenderer));
-            source.Add(new FuncSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>));
-            source.Add(new InstanceSource<SomeDummyClass>(5f));
+            //source.Add(new FuncSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>));
+            source.Add(new SingletonSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>()));
+            //source.Add(new InstanceSource<SomeDummyClass>(5f));
+            source.Add(new SingletonSource<SomeDummyClass>(new SomeDummyClass(5f)));
 
             _dIContainer = new GameObjectDIContainer(source, new UnityLogErrorProvider());
+            _dIContainer.Prebake();
 
             yield return new WaitForSeconds(1f);
 
-            _dIContainer.Inject(_rootToInject);
 
-            yield return new WaitForSeconds(1f);
             _dIContainer.Inject(_rootToInject2);
+            yield return new WaitForSeconds(1f);
+            _dIContainer.Inject(_rootToInject);
 
             yield return new WaitForSeconds(0.2f);
             Debug.LogError("Pause");

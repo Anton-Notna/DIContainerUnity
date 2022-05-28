@@ -2,7 +2,7 @@
 
 namespace DI
 {
-    public abstract class SourceUnit<T> : ISourceUnit 
+    public abstract class SourceUnit<T> : ISource 
     {
         public Type Type => typeof(T);
         public object Value => GetValue();
