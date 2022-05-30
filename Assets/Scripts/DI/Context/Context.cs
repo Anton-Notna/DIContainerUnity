@@ -7,6 +7,11 @@ namespace DI
     {
         private Dictionary<Type, ISource> _sources = new Dictionary<Type, ISource>();
 
+        public event Action<Type, ISource> SourceAdded;
+        public event Action<Type, ISource> SourceRemoved;
+
+        public IEnumerable<KeyValuePair<Type, ISource>> GetSources() => _sources;
+
         public void AddRange(IEnumerable<ISource> units)
         {
             foreach (ISource source in units)
@@ -19,6 +24,7 @@ namespace DI
                 throw new InvalidOperationException($"Source typeof {unit.Type} already added");
 
             _sources.Add(unit.Type, unit);
+            SourceAdded?.Invoke(unit.Type, unit);
         }
 
         public bool Contains(Type type) => _sources.ContainsKey(type);
@@ -31,10 +37,11 @@ namespace DI
 
         public void Remove(Type type)
         {
-            if(_sources.ContainsKey(type) == false)
+            if(_sources.TryGetValue(type,out ISource source) == false)
                 throw new InvalidOperationException($"There is no {type}");
 
             _sources.Remove(type);
+            SourceRemoved?.Invoke(type, source);
         }
 
         public bool TryGet(Type type, out object value)

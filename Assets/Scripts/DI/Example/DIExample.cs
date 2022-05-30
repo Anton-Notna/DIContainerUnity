@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using Zenject;
 
 namespace DI.Example
 {
@@ -23,27 +24,41 @@ namespace DI.Example
 
         private IEnumerator Start()
         {
-            Context source = new Context();
+            Context context1 = new Context();
+            Context context2 = new Context();
 
-            source.Add(new SingletonSource<GameObject>(_gameObject));
-            source.Add(new SingletonSource<Camera>(FindObjectOfType<Camera>()));
-            source.Add(new SingletonSource<Object>(_gameObject));
-            source.Add(new SingletonSource<Transform>(_transform));
-            source.Add(new SingletonSource<MeshRenderer>(_meshRenderer));
-            //source.Add(new FuncSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>));
-            source.Add(new SingletonSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>()));
-            //source.Add(new InstanceSource<SomeDummyClass>(5f));
-            source.Add(new SingletonSource<SomeDummyClass>(new SomeDummyClass(5f)));
+            context1.Add(new SingletonSource<GameObject>(_gameObject));
+            context1.Add(new SingletonSource<Camera>(FindObjectOfType<Camera>()));
+            context1.Add(new SingletonSource<Object>(_gameObject));
+            context2.Add(new SingletonSource<Transform>(_transform));
+            context2.Add(new SingletonSource<MeshRenderer>(_meshRenderer));
+            context2.Add(new SingletonSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>()));
+            context2.Add(new SingletonSource<SomeDummyClass>(new SomeDummyClass(5f)));
 
-            _dIContainer = new GameObjectDIContainer(source, new UnityLogErrorProvider());
-            _dIContainer.Prebake();
+            _dIContainer = new GameObjectDIContainer(new UnityLogErrorProvider());
+            _dIContainer.AddContext(context1);
+            _dIContainer.AddContext(context2);
 
-            yield return new WaitForSeconds(1f);
+            DiContainer diContainer = new DiContainer();
+            diContainer.Bind<GameObject>().FromInstance(_gameObject).AsSingle();
+            diContainer.Bind<Camera>().FromInstance(FindObjectOfType<Camera>()).AsSingle();
+            diContainer.Bind<Object>().FromInstance(_gameObject).AsSingle();
+            diContainer.Bind<Transform>().FromInstance(_transform).AsSingle();
+
+            diContainer.Bind<MeshRenderer>().FromInstance(_meshRenderer).AsSingle();
+            diContainer.Bind<MeshFilter>().FromInstance(_meshFilter.gameObject.GetComponent<MeshFilter>()).AsSingle();
+            diContainer.Bind<SomeDummyClass>().FromInstance(new SomeDummyClass(5f)).AsSingle();
 
 
+            yield return new WaitForSeconds(0.5f);
             _dIContainer.Inject(_rootToInject2);
-            yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(0.5f);
+            diContainer.InjectGameObject(_rootToInject2);
+
+            yield return new WaitForSeconds(0.5f);
             _dIContainer.Inject(_rootToInject);
+            yield return new WaitForSeconds(0.5f);
+            diContainer.InjectGameObject(_rootToInject);
 
             yield return new WaitForSeconds(0.2f);
             Debug.LogError("Pause");

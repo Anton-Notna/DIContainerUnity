@@ -2,7 +2,7 @@
 
 namespace DI
 {
-    public class FuncSource<T> : SourceUnit<T>
+    public class FuncSource<T> : Source<T>
     {
         private Func<T> _func;
 

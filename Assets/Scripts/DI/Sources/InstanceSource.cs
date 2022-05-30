@@ -2,7 +2,7 @@
 
 namespace DI
 {
-    public class InstanceSource<T> : SourceUnit<T>
+    public class InstanceSource<T> : Source<T>
     {
         private object[] _args;
 
