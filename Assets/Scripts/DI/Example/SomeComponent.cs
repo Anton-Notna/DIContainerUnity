@@ -3,6 +3,42 @@ using Zenject;
 
 namespace DI.Example
 {
+    [DITarget]
+    public class SomeRecursevlyClass3 : SomeRecursevlyClass2
+    {
+        private SomeRecursevlyClass _class = new SomeRecursevlyClass();
+
+        [DIMethod]
+        private void Inject(GameObject gameObject)
+        {
+            Debug.Log("SomeRecursevlyClass3 inject");
+        }
+    }
+
+
+    [DITarget]
+    public class SomeRecursevlyClass2
+    {
+        private SomeRecursevlyClass _class = new SomeRecursevlyClass();
+
+        [DIMethod]
+        private void Inject2(GameObject gameObject)
+        {
+            Debug.Log("SomeRecursevlyClass2 inject");
+        }
+    }
+
+
+    [DITarget]
+    public class SomeRecursevlyClass
+    {
+        [DIMethod]
+        public void Inject(GameObject gameObject)
+        {
+            Debug.Log("SomeRecursevlyClass inject");
+        }
+    }
+
     public class SomeDummyClass
     {
         private static bool _log = false;

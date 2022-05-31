@@ -6,6 +6,7 @@ namespace DI.Example
 {
     public class DIExample : MonoBehaviour
     {
+
         [SerializeField]
         private GameObject _gameObject;
         [SerializeField]
@@ -51,6 +52,7 @@ namespace DI.Example
 
 
             yield return new WaitForSeconds(0.5f);
+            //_dIContainer.InjectObject(new SomeRecursevlyClass3());
             _dIContainer.Inject(_rootToInject2);
             yield return new WaitForSeconds(0.5f);
             diContainer.InjectGameObject(_rootToInject2);

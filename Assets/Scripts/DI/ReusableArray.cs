@@ -4,29 +4,30 @@ namespace DI
 {
     public class ReusableArray<T>
     {
-        private Dictionary<int, T[]> _arrays = new Dictionary<int, T[]>();
+        private List<T[]> _arrays;
 
         public ReusableArray(int preparedMaxLength)
         {
-            for (int i = 0; i <= preparedMaxLength; i++)
-                Create(i);
+            _arrays = new List<T[]>(preparedMaxLength);
+            Upscale(preparedMaxLength);
         }
 
         public T[] Get(int length)
         {
-            if (_arrays.TryGetValue(length, out T[] result))
-                return result;
-            else
-                return Create(length);
+            if (_arrays.Count <= length)
+                Upscale(length);
 
+            return _arrays[length];
         }
 
-        private T[] Create(int length)
-        {
-            T[] result = new T[length];
-            _arrays.Add(length, result);
 
-            return result;
+        private void Upscale(int length)
+        {
+            for (int i = _arrays.Count; i <= length; i++)
+            {
+                T[] result = new T[_arrays.Count];
+                _arrays.Add(result);
+            }
         }
     }
 }
