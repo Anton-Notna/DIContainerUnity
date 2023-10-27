@@ -1,7 +1,13 @@
-﻿namespace DI
+﻿using UnityEngine;
+
+namespace DI
 {
-    public interface IReadOnlyDIContainer<T>
+    public interface IReadOnlyDIContainer
     {
-        public void Inject(T target);
+        public GameObject Inject(GameObject target);
+
+        public object Inject(object obj);
+
+        public T Instantiate<T>(params object[] subArgs);
     }
 }

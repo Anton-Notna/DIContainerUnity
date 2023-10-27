@@ -1,11 +1,17 @@
-﻿namespace DI
+﻿using System;
+
+namespace DI
 {
-    public class SingletonSource<T> : Source<T>
+    public class SingletonSource : ISource
     {
-        private T _value;
+        public SingletonSource(object value)
+        {
+            Value = value;
+            Type = value.GetType();
+        }
 
-        public SingletonSource(T value) => _value = value;
+        public Type Type { get; private set; }
 
-        public override T GetValue() => _value;
+        public object Value { get; private set; }
     }
 }

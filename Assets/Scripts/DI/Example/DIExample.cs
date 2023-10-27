@@ -6,7 +6,6 @@ namespace DI.Example
 {
     public class DIExample : MonoBehaviour
     {
-
         [SerializeField]
         private GameObject _gameObject;
         [SerializeField]
@@ -28,9 +27,9 @@ namespace DI.Example
             Context context1 = new Context();
             Context context2 = new Context();
 
-            context1.Add(new SingletonSource<GameObject>(_gameObject));
-            context1.Add(new SingletonSource<Camera>(FindObjectOfType<Camera>()));
-            context1.Add(new SingletonSource<Object>(_gameObject));
+            context1.Add(_gameObject.AsSources<GameObject, GameObject, Object>());
+            context1.Add(FindObjectOfType<Camera>().AsSource());
+            context1.Add(_gameObject.AsSource<Object>());
             context2.Add(new SingletonSource<Transform>(_transform));
             context2.Add(new SingletonSource<MeshRenderer>(_meshRenderer));
             context2.Add(new SingletonSource<MeshFilter>(_meshFilter.gameObject.GetComponent<MeshFilter>()));

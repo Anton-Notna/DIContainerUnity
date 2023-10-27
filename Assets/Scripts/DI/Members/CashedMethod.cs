@@ -25,4 +25,5 @@ namespace DI
 
         public void Invoke(object target, object[] args) => _method.Invoke(target, args);
     }
+   
 }

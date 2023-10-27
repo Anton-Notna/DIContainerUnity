@@ -4,20 +4,6 @@ using System.Reflection;
 
 namespace DI
 {
-    public class CashedTarget
-    {
-        public readonly Type Type;
-        private readonly FieldInfo _field;
-
-        public CashedTarget(FieldInfo field)
-        {
-            _field = field;
-            Type = _field.FieldType;
-        }
-
-        public object GetTarget(object parent) => _field.GetValue(parent);
-    }
-
     public class CashedMembers
     {
         public readonly IReadOnlyList<FieldInfo> Fields;
@@ -40,7 +26,8 @@ namespace DI
                 {
                     if (fields[f].IsDefined(typeof(DIFIeldAttribute), true))
                         cashedFields.Add(fields[f]);
-                    else if (fields[f].FieldType.IsDefined(typeof(DITargetAttribute), true))
+                    else if (fields[f].IsDefined(typeof(DITargetAttribute), true) &&
+                        fields[f].FieldType.IsDefined(typeof(DITargetAttribute), true))
                         cashedTargets.Add(new CashedTarget(fields[f]));
                 }
 

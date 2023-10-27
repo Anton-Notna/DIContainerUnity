@@ -5,18 +5,35 @@ namespace DI
 {
     public class Context : IContext
     {
-        private Dictionary<Type, ISource> _sources = new Dictionary<Type, ISource>();
+        private readonly Dictionary<Type, ISource> _sources = new Dictionary<Type, ISource>();
+
+        public Context() { }
+
+        public Context(params ISource[] sources) => AddRange(sources);
+
+        public Context(params object[] singletonSources)
+        {
+            ISource[] sources = new ISource[singletonSources.Length];
+            for (int i = 0; i < sources.Length; i++)
+                sources[i] = new SingletonSource(singletonSources[i]);
+
+            AddRange(sources);
+        }
 
         public event Action<Type, ISource> SourceAdded;
+
         public event Action<Type, ISource> SourceRemoved;
 
         public IEnumerable<KeyValuePair<Type, ISource>> GetSources() => _sources;
 
-        public void AddRange(IEnumerable<ISource> units)
+        public void Add(IEnumerable<ISource> units)
         {
             foreach (ISource source in units)
                 Add(source);
         }
+
+        [Obsolete("Use \"Add(IEnumerable<ISource> units)\"")]
+        public void AddRange(IEnumerable<ISource> units) => Add(units);
 
         public void Add(ISource unit)
         {
@@ -37,7 +54,7 @@ namespace DI
 
         public void Remove(Type type)
         {
-            if(_sources.TryGetValue(type,out ISource source) == false)
+            if (_sources.TryGetValue(type,out ISource source) == false)
                 throw new InvalidOperationException($"There is no {type}");
 
             _sources.Remove(type);

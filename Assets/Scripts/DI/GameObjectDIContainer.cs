@@ -6,24 +6,25 @@ using UnityEngine;
 namespace DI
 {
     // TODO:
-    // (?) Injecting source when adding
-    // (?) Remove generic from IReadOnlyDIContainer
-    // Is it possible to improve perfomance of MethodBase.Invoke()/FieldInfo.SetValue()?
-
-    public class GameObjectDIContainer : IReadOnlyDIContainer<GameObject>
+    // Injecting source when adding
+    // Is it possible to improve performance of MethodBase.Invoke()?
+    // (?) Add DIConstructor
+    public class GameObjectDIContainer : IReadOnlyDIContainer
     {
-        private IErrorProvider _errorProvider;
-        private ContextAgregator _contextAgregator;
-        private InjectableMembersProvider _injectableMembers;
+        private readonly IErrorProvider _errorProvider;
+        private readonly ContextAggregator _contextAggregator;
+        private readonly InjectableMembersProvider _injectableMembers;
+        private readonly ConstructorsProvider _constructorsProvider;
 
-        private List<Component> _components = new List<Component>();
-        Dictionary<object, object> _injected = new Dictionary<object, object>(999);
-        private ReusableArray<object> _reusableArray = new ReusableArray<object>(10);
+        private readonly Pool<List<Component>> _components = new Pool<List<Component>>(() => new List<Component>());
+        private readonly Pool<Dictionary<object, object>> _injected = new Pool<Dictionary<object, object>>(() => new Dictionary<object, object>(999));
+        private readonly ReusableArray<object> _reusableArray = new ReusableArray<object>(10);
 
         public GameObjectDIContainer(IErrorProvider errorProvider, params IReadOnlyContext[] contexts)
         {
             _errorProvider = errorProvider;
-            _contextAgregator = new ContextAgregator(_errorProvider);
+            _contextAggregator = new ContextAggregator(_errorProvider);
+            _constructorsProvider = new ConstructorsProvider(_errorProvider);
             _injectableMembers = new InjectableMembersProvider();
             _injectableMembers.Prebake();
 
@@ -31,57 +32,90 @@ namespace DI
                 return;
 
             for (int i = 0; i < contexts.Length; i++)
-                _contextAgregator.Add(contexts[i]);
+                _contextAggregator.Add(contexts[i]);
         }
 
-        public void Inject(GameObject target) 
+        public T Instantiate<T>(params object[] subArgs)
+        {
+            Type type = typeof(T);
+            IReadOnlyList<Type> types = _constructorsProvider.GetConstructor(type);
+            object[] args = _reusableArray.Get(types.Count);
+            for (int i = 0; i < types.Count; i++)
+            {
+                Type argType = types[i];
+                if (TryGet(subArgs, argType, out object arg))
+                    args[i] = arg;
+                else
+                    args[i] = _contextAggregator.GetObject(argType);
+            }
+
+            return (T)Inject(Activator.CreateInstance(type, args));
+        }
+
+        public GameObject Inject(GameObject target)
         {
             if (target.TryGetComponent(out BackedInjection backedInjection))
-                InjectFiltred(backedInjection.Components);
+                InjectFiltered(backedInjection.Components);
             else
                 InjectSimple(target);
+
+            return target;
         }
 
-        public void InjectObject(object obj)
+        public object Inject(object obj)
         {
-            if (_injectableMembers.Injectable(obj.GetType()))
-                InjectUnit(obj, obj.GetType(), _injected);
+            Dictionary<object, object> injected = _injected.Get();
 
-            _injected.Clear();
+            if (_injectableMembers.Injectable(obj.GetType()))
+                InjectUnit(obj, obj.GetType(), injected);
+
+            injected.Clear();
+            _injected.Release(injected);
+
+            return obj;
         }
 
-        public void AddContext(IReadOnlyContext context) => _contextAgregator.Add(context);
+        public void AddContext(IReadOnlyContext context) => _contextAggregator.Add(context);
 
-        public void RemoveContext(IReadOnlyContext context) => _contextAgregator.Remove(context);
+        public void RemoveContext(IReadOnlyContext context) => _contextAggregator.Remove(context);
 
         private void InjectSimple(GameObject target)
         {
-            target.GetComponentsInChildren(true, _components);
-            for (int c = 0; c < _components.Count; c++)
+            Dictionary<object, object> injected = _injected.Get();
+            List<Component> components = _components.Get();
+
+            target.GetComponentsInChildren(true, components);
+            for (int c = 0; c < components.Count; c++)
             {
-                Type type = _components[c].GetType();
+                Component component = components[c];
+                Type type = component.GetType();
 
                 if (_injectableMembers.Injectable(type))
-                    InjectUnit(_components[c], type, _injected);
+                    InjectUnit(component, type, injected);
             }
-            //Debug.Log(_injected.Count);
-            _injected.Clear();
+
+            injected.Clear();
+            _injected.Release(injected);
+            _components.Release(components);
         }
 
-        private void InjectFiltred(IReadOnlyList<Component> components)
+        private void InjectFiltered(IReadOnlyList<Component> components)
         {
-            for (int c = 0; c < components.Count; c++)
-                InjectUnit(components[c], components[c].GetType(), _injected);
+            Dictionary<object, object> injected = _injected.Get();
 
-            _injected.Clear();
+            for (int c = 0; c < components.Count; c++)
+                InjectUnit(components[c], components[c].GetType(), injected);
+
+            injected.Clear();
+            _injected.Release(injected);
         }
 
         private void InjectUnit(object target, Type type, Dictionary<object, object> injected)
         {
-            /*if (injected.ContainsKey(target))
+            if (injected.ContainsKey(target))
                 return;
 
-            injected.Add(target, null);*/
+            injected.Add(target, null);
 
             CashedMembers members = _injectableMembers.GetMembers(type);
 
@@ -120,27 +154,23 @@ namespace DI
             InjectUnit(target, cashed.Type, injected);
         }
 
-        private object GetObject(Type type) => _contextAgregator.GetObject(type);
-    }
+        private object GetObject(Type type) => _contextAggregator.GetObject(type);
 
-    public static class HashSetExtensions
-    {
-        private static class HashSetDelegateHolder<T>
+        private static bool TryGet(object[] args, Type type, out object arg)
         {
-            private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            public static MethodInfo InitializeMethod { get; } = typeof(HashSet<T>).GetMethod("Initialize", Flags);
-        }
+            for (int i = 0; i < args.Length; i++)
+            {
+                object obj = args[i];
 
-        public static void SetCapacity<T>(this HashSet<T> hs, int capacity)
-        {
-            HashSetDelegateHolder<T>.InitializeMethod.Invoke(hs, new object[] { capacity });
-        }
+                if (obj != null && obj.GetType() == type)
+                {
+                    arg = obj;
+                    return true;
+                }
+            }
 
-        public static HashSet<T> GetHashSet<T>(int capacity)
-        {
-            var hashSet = new HashSet<T>();
-            hashSet.SetCapacity(capacity);
-            return hashSet;
+            arg = default;
+            return false;
         }
     }
 }

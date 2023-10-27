@@ -6,8 +6,8 @@ namespace DI
 {
     public class InjectableMembersProvider
     {
-        private HashSet<Type> _closedTypes = new HashSet<Type>();
-        private Dictionary<Type, CashedMembers> _injectableTypes = new Dictionary<Type, CashedMembers>();
+        private readonly HashSet<Type> _closedTypes = new HashSet<Type>();
+        private readonly Dictionary<Type, CashedMembers> _injectableTypes = new Dictionary<Type, CashedMembers>();
 
         public void Prebake()
         {
